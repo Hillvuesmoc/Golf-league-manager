@@ -33,6 +33,34 @@ const TEE_BOX_COLORS = {
   Red: { bg: "#A83B2A", text: "#FFFFFF" },
 };
 
+function parseDob(input) {
+  if (!input) return null;
+  const trimmed = String(input).trim();
+  let m = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) {
+    const month = parseInt(m[1], 10), day = parseInt(m[2], 10), year = parseInt(m[3], 10);
+    const d = new Date(year, month - 1, day);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  m = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) {
+    const year = parseInt(m[1], 10), month = parseInt(m[2], 10), day = parseInt(m[3], 10);
+    const d = new Date(year, month - 1, day);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function computeAge(dob) {
+  const birth = parseDob(dob);
+  if (!birth) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
 function teeBoxForAge(age) {
   if (age === null || age === undefined || age === "") return null;
   const n = Number(age);
@@ -40,6 +68,10 @@ function teeBoxForAge(age) {
   if (n >= 80) return "Red";
   if (n >= 65) return "Green";
   return "Yellow";
+}
+
+function teeBoxForDob(dob) {
+  return teeBoxForAge(computeAge(dob));
 }
 
 // ---------- Helpers ----------
@@ -101,13 +133,17 @@ function scoreArrangement(teams, ratingLookup, pairHistory, topIds, weekCounter)
   return variance * 1.0 + topPenalty + pairPenalty * 30;
 }
 
-function TeeBadge({ age }) {
+function TeeBadge({ dob }) {
+  const age = computeAge(dob);
   const box = teeBoxForAge(age);
   if (!box) return null;
   const c = TEE_BOX_COLORS[box];
   return (
-    <span style={{ fontSize: 10.5, fontWeight: 700, background: c.bg, color: c.text, borderRadius: 4, padding: "1px 6px", letterSpacing: 0.3 }}>
-      {box.toUpperCase()}
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span style={{ fontSize: 10.5, fontWeight: 700, background: c.bg, color: c.text, borderRadius: 4, padding: "1px 6px", letterSpacing: 0.3 }}>
+        {box.toUpperCase()}
+      </span>
+      <span style={{ fontSize: 11, color: T.muted }}>{age}</span>
     </span>
   );
 }
@@ -117,7 +153,7 @@ function ruleNotesForTeam(team, playersById) {
   if (team.playerIds.length === 3) {
     notes.push("3-player team: one player hits twice on each hole. Rotate so every player doubles-up on every third hole, and each player's double-hit shot is used at least twice across the 9.");
   }
-  const hasRedTee = team.playerIds.some((id) => teeBoxForAge(playersById[id]?.age) === "Red");
+  const hasRedTee = team.playerIds.some((id) => teeBoxForDob(playersById[id]?.dob) === "Red");
   if (hasRedTee) {
     notes.push("Red-tee player on this team: red tee shot can't count on hole 2 — use a teammate's tee shot there instead.");
   }
@@ -189,7 +225,7 @@ export default function GolfLeagueApp({ onSignOut }) {
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("roster");
   const [copyStatus, setCopyStatus] = useState("");
-  const [newPlayer, setNewPlayer] = useState({ name: "", age: "", ratings: emptyRatings(), isGuest: false });
+  const [newPlayer, setNewPlayer] = useState({ name: "", dob: "", ratings: emptyRatings(), isGuest: false });
   const [saveError, setSaveError] = useState(false);
   const skipNextSave = useRef(false);
 
@@ -251,9 +287,9 @@ export default function GolfLeagueApp({ onSignOut }) {
     const ratings = newPlayer.isGuest ? avgRatingsAcrossRoster() : newPlayer.ratings;
     setState((s) => ({
       ...s,
-      players: [...s.players, { id: uid(), name: newPlayer.name.trim(), age: newPlayer.age === "" ? null : Number(newPlayer.age), ratings, isGuest: newPlayer.isGuest, isTop: false }],
+      players: [...s.players, { id: uid(), name: newPlayer.name.trim(), dob: newPlayer.dob || null, ratings, isGuest: newPlayer.isGuest, isTop: false }],
     }));
-    setNewPlayer({ name: "", age: "", ratings: emptyRatings(), isGuest: false });
+    setNewPlayer({ name: "", dob: "", ratings: emptyRatings(), isGuest: false });
   };
 
   const removePlayer = (id) => {
@@ -372,7 +408,7 @@ export default function GolfLeagueApp({ onSignOut }) {
     teams.forEach((t, idx) => {
       out += `TEAM ${idx + 1}${t.playerIds.length === 3 ? " (3-player — rotate double-hit each hole)" : ""}\n`;
       t.playerIds.forEach((id) => {
-        const box = teeBoxForAge(playersById[id]?.age);
+        const box = teeBoxForDob(playersById[id]?.dob);
         out += `${playersById[id]?.name || "?"}${box ? ` (${box})` : ""}\n`;
       });
       out += "\n";
@@ -523,22 +559,20 @@ function RosterTab({ players, weights, updateWeight, addPlayer, removePlayer, up
           />
           <input
             className="glm-input"
-            type="number"
-            placeholder="Age"
-            min={1}
-            max={110}
-            value={newPlayer.age}
-            onChange={(e) => setNewPlayer((n) => ({ ...n, age: e.target.value }))}
-            style={{ width: 64 }}
+            type="text"
+            placeholder="DOB (MM/DD/YYYY)"
+            value={newPlayer.dob}
+            onChange={(e) => setNewPlayer((n) => ({ ...n, dob: e.target.value }))}
+            style={{ width: 140 }}
           />
           <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 5, color: T.muted }}>
             <input type="checkbox" checked={newPlayer.isGuest} onChange={(e) => setNewPlayer((n) => ({ ...n, isGuest: e.target.checked }))} />
             Guest (auto-rated to roster average)
           </label>
         </div>
-        {newPlayer.age !== "" && (
+        {newPlayer.dob !== "" && (
           <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-            Tee box: <TeeBadge age={newPlayer.age} />
+            Tee box: <TeeBadge dob={newPlayer.dob} />
           </div>
         )}
         {!newPlayer.isGuest && (
@@ -583,7 +617,7 @@ function RosterTab({ players, weights, updateWeight, addPlayer, removePlayer, up
                 </button>
                 <div style={{ flex: 1, fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }} onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}>
                   {p.name} {p.isGuest && <span style={{ fontSize: 11, color: T.muted, fontWeight: 500 }}>(guest)</span>}
-                  <TeeBadge age={p.age} />
+                  <TeeBadge dob={p.dob} />
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: T.fairway }}>{(ratingLookup[p.id] ?? 5).toFixed(1)}</div>
                 <button className="glm-btn" style={{ background: "none", color: T.flag, padding: 4 }} onClick={() => removePlayer(p.id)}>
@@ -593,17 +627,16 @@ function RosterTab({ players, weights, updateWeight, addPlayer, removePlayer, up
               {expandedId === p.id && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.line}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, gridColumn: "1 / -1" }}>
-                    <span style={{ fontSize: 11.5, width: 34, color: T.muted, fontWeight: 700 }}>AGE</span>
+                    <span style={{ fontSize: 11.5, width: 34, color: T.muted, fontWeight: 700 }}>DOB</span>
                     <input
                       className="glm-input"
-                      type="number"
-                      min={1}
-                      max={110}
-                      value={p.age ?? ""}
-                      onChange={(e) => updatePlayer(p.id, { age: e.target.value === "" ? null : Number(e.target.value) })}
-                      style={{ width: 64 }}
+                      type="text"
+                      placeholder="MM/DD/YYYY"
+                      value={p.dob ?? ""}
+                      onChange={(e) => updatePlayer(p.id, { dob: e.target.value || null })}
+                      style={{ width: 140 }}
                     />
-                    <span style={{ fontSize: 11, color: T.muted }}>sets tee box automatically</span>
+                    <span style={{ fontSize: 11, color: T.muted }}>tee box updates automatically each year</span>
                   </div>
                   {CATEGORIES.map((c) => (
                     <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -703,7 +736,7 @@ function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, r
                     {topIds.has(pid) && <Star size={12} fill={T.gold} color={T.gold} />}
                     <span style={{ flex: 1, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
                       {playersById[pid]?.name}
-                      <TeeBadge age={playersById[pid]?.age} />
+                      <TeeBadge dob={playersById[pid]?.dob} />
                     </span>
                     <select
                       className="glm-input"
@@ -777,13 +810,16 @@ function RulesTab() {
       <RuleSection title="Tee box by age">
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <TeeBadge age={40} /> <span>Men 64 and younger</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, background: TEE_BOX_COLORS.Yellow.bg, color: TEE_BOX_COLORS.Yellow.text, borderRadius: 4, padding: "1px 6px" }}>YELLOW</span>
+            <span>Men 64 and younger</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <TeeBadge age={70} /> <span>Men 65–79</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, background: TEE_BOX_COLORS.Green.bg, color: TEE_BOX_COLORS.Green.text, borderRadius: 4, padding: "1px 6px" }}>GREEN</span>
+            <span>Men 65–79</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <TeeBadge age={85} /> <span>Men 80 and older — cannot use the red tee shot on hole 2</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, background: TEE_BOX_COLORS.Red.bg, color: TEE_BOX_COLORS.Red.text, borderRadius: 4, padding: "1px 6px" }}>RED</span>
+            <span>Men 80 and older — cannot use the red tee shot on hole 2</span>
           </div>
         </div>
       </RuleSection>
