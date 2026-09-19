@@ -320,6 +320,10 @@ export default function GolfLeagueApp({ onSignOut }) {
     }));
   };
 
+  const clearSignups = (day) => {
+    setState((s) => ({ ...s, days: { ...s.days, [day]: { ...s.days[day], signups: {} } } }));
+  };
+
   const playingIds = (day) => Object.entries(state.days[day].signups).filter(([, v]) => v).map(([k]) => k);
 
   const runGenerate = (day) => {
@@ -531,6 +535,7 @@ export default function GolfLeagueApp({ onSignOut }) {
             ratingLookup={ratingLookup}
             topIds={topIds}
             toggleSignup={toggleSignup}
+            clearSignups={clearSignups}
             runGenerate={runGenerate}
             toggleLock={toggleLock}
             movePlayer={movePlayer}
@@ -730,7 +735,7 @@ function SubstituteControl({ unassignedPlayers, onAdd }) {
   );
 }
 
-function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, runGenerate, toggleLock, movePlayer, removePlayerFromTeam, addPlayerToTeam, updateTeamScore, publish, teamStrength, teamWarnings, copyTeams, copyStatus, formatTeamsText }) {
+function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, clearSignups, runGenerate, toggleLock, movePlayer, removePlayerFromTeam, addPlayerToTeam, updateTeamScore, publish, teamStrength, teamWarnings, copyTeams, copyStatus, formatTeamsText }) {
   const dayState = state.days[day];
   const teams = dayState.teams || [];
   const playingCount = Object.values(dayState.signups).filter(Boolean).length;
@@ -740,9 +745,16 @@ function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, r
   return (
     <div>
       <div className="glm-card" style={{ padding: 14, marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10, color: T.fairway, display: "flex", justifyContent: "space-between" }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10, color: T.fairway, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>Who's playing {day[0].toUpperCase() + day.slice(1)}?</span>
-          <span style={{ color: T.muted, fontWeight: 500 }}>{playingCount} confirmed</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ color: T.muted, fontWeight: 500 }}>{playingCount} confirmed</span>
+            {playingCount > 0 && (
+              <button className="glm-btn" style={{ background: "none", color: T.flag, padding: "3px 6px", fontSize: 12, fontWeight: 600 }} onClick={() => clearSignups(day)}>
+                Clear all
+              </button>
+            )}
+          </div>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {state.players.map((p) => {
