@@ -377,6 +377,28 @@ export default function GolfLeagueApp({ onSignOut }) {
     });
   };
 
+  const deleteHistoryEntry = (historyId) => {
+    setState((s) => ({ ...s, history: s.history.filter((h) => h.id !== historyId) }));
+  };
+
+  const deleteHistoryTeam = (historyId, teamIndex) => {
+    setState((s) => ({
+      ...s,
+      history: s.history
+        .map((h) => (h.id === historyId ? { ...h, teams: h.teams.filter((_, i) => i !== teamIndex) } : h))
+        .filter((h) => h.teams.length > 0),
+    }));
+  };
+
+  const updateHistoryScore = (historyId, teamIndex, value) => {
+    setState((s) => ({
+      ...s,
+      history: s.history.map((h) =>
+        h.id === historyId ? { ...h, teams: h.teams.map((t, i) => (i === teamIndex ? { ...t, score: value } : t)) } : h
+      ),
+    }));
+  };
+
   const finalizeWeek = (day) => {
     setState((s) => {
       const teams = s.days[day].teams || [];
@@ -594,7 +616,17 @@ export default function GolfLeagueApp({ onSignOut }) {
             formatTeamsText={formatTeamsText}
           />
         )}
-        {tab === "history" && <HistoryTab pairHistory={state.pairHistory} playersById={playersById} history={state.history} days={state.days} />}
+        {tab === "history" && (
+          <HistoryTab
+            pairHistory={state.pairHistory}
+            playersById={playersById}
+            history={state.history}
+            days={state.days}
+            deleteHistoryEntry={deleteHistoryEntry}
+            deleteHistoryTeam={deleteHistoryTeam}
+            updateHistoryScore={updateHistoryScore}
+          />
+        )}
         {tab === "rules" && <RulesTab />}
       </div>
     </div>
@@ -1027,7 +1059,7 @@ function RulesTab() {
   );
 }
 
-function HistoryTab({ pairHistory, playersById, history, days }) {
+function HistoryTab({ pairHistory, playersById, history, days, deleteHistoryEntry, deleteHistoryTeam, updateHistoryScore }) {
   const pairRows = Object.entries(pairHistory)
     .map(([key, v]) => {
       const [a, b] = key.split("|");
@@ -1096,13 +1128,44 @@ function HistoryTab({ pairHistory, playersById, history, days }) {
             })}
             {[...history].reverse().map((h) => (
               <div key={h.id} className="glm-card" style={{ padding: 12 }}>
-                <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 6 }}>
-                  {h.day[0].toUpperCase() + h.day.slice(1)} · {h.date}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <div style={{ fontSize: 12.5, color: T.muted }}>
+                    {h.day[0].toUpperCase() + h.day.slice(1)} · {h.date}
+                  </div>
+                  <button
+                    className="glm-btn"
+                    style={{ background: "none", color: T.flag, padding: 3 }}
+                    title="Delete this entire week's entry"
+                    onClick={() => {
+                      if (window.confirm(`Delete this whole ${h.day} · ${h.date} entry from history? This can't be undone.`)) {
+                        deleteHistoryEntry(h.id);
+                      }
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
                 {h.teams.map((t, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
-                    <span>{t.playerIds.map((id) => playersById[id]?.name || "?").join(", ")}</span>
-                    <span style={{ fontWeight: 700, color: T.fairway }}>{formatScore(t.score)}</span>
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "3px 0" }}>
+                    <span style={{ flex: 1 }}>{t.playerIds.map((id) => playersById[id]?.name || "?").join(", ")}</span>
+                    <input
+                      className="glm-input"
+                      type="number"
+                      step="1"
+                      placeholder="±par"
+                      value={t.score ?? ""}
+                      onChange={(e) => updateHistoryScore(h.id, i, e.target.value === "" ? null : Number(e.target.value))}
+                      style={{ width: 60, fontSize: 12.5, padding: "3px 6px" }}
+                    />
+                    <span style={{ fontWeight: 700, color: T.fairway, width: 30, textAlign: "right" }}>{formatScore(t.score)}</span>
+                    <button
+                      className="glm-btn"
+                      style={{ background: "none", color: T.muted, padding: 2 }}
+                      title="Remove this team from history"
+                      onClick={() => deleteHistoryTeam(h.id, i)}
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 ))}
               </div>
