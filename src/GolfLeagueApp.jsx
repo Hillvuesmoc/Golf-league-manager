@@ -320,8 +320,24 @@ export default function GolfLeagueApp({ onSignOut }) {
     }));
   };
 
-  const clearSignups = (day) => {
-    setState((s) => ({ ...s, days: { ...s.days, [day]: { ...s.days[day], signups: {} } } }));
+  const resetDay = (day) => {
+    setState((s) => {
+      const dayState = s.days[day];
+      const hasScored = dayState.teams && dayState.teams.some((t) => t.score !== null && t.score !== undefined);
+      const shouldArchive = dayState.teams && dayState.teams.length > 0 && (dayState.published || hasScored);
+      const history = shouldArchive
+        ? [
+            ...s.history,
+            {
+              id: uid(),
+              day,
+              date: new Date().toLocaleDateString(),
+              teams: dayState.teams.map((t) => ({ playerIds: t.playerIds, score: t.score ?? null })),
+            },
+          ]
+        : s.history;
+      return { ...s, history, days: { ...s.days, [day]: { signups: {}, teams: null, published: false } } };
+    });
   };
 
   const playingIds = (day) => Object.entries(state.days[day].signups).filter(([, v]) => v).map(([k]) => k);
@@ -357,7 +373,7 @@ export default function GolfLeagueApp({ onSignOut }) {
             },
           ]
         : s.history;
-      return { ...s, history, days: { ...s.days, [day]: { ...s.days[day], teams: newTeams, published: false, warning } } };
+      return { ...s, history, days: { ...s.days, [day]: { ...s.days[day], teams: newTeams, published: false, warning, teamsDate: new Date().toLocaleDateString() } } };
     });
   };
 
@@ -562,7 +578,7 @@ export default function GolfLeagueApp({ onSignOut }) {
             ratingLookup={ratingLookup}
             topIds={topIds}
             toggleSignup={toggleSignup}
-            clearSignups={clearSignups}
+            resetDay={resetDay}
             runGenerate={runGenerate}
             toggleLock={toggleLock}
             movePlayer={movePlayer}
@@ -763,7 +779,7 @@ function SubstituteControl({ unassignedPlayers, onAdd }) {
   );
 }
 
-function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, clearSignups, runGenerate, toggleLock, movePlayer, removePlayerFromTeam, addPlayerToTeam, updateTeamScore, publish, finalizeWeek, teamStrength, teamWarnings, copyTeams, copyStatus, formatTeamsText }) {
+function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, resetDay, runGenerate, toggleLock, movePlayer, removePlayerFromTeam, addPlayerToTeam, updateTeamScore, publish, finalizeWeek, teamStrength, teamWarnings, copyTeams, copyStatus, formatTeamsText }) {
   const dayState = state.days[day];
   const teams = dayState.teams || [];
   const playingCount = Object.values(dayState.signups).filter(Boolean).length;
@@ -777,9 +793,17 @@ function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, c
           <span>Who's playing {day[0].toUpperCase() + day.slice(1)}?</span>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ color: T.muted, fontWeight: 500 }}>{playingCount} confirmed</span>
-            {playingCount > 0 && (
-              <button className="glm-btn" style={{ background: "none", color: T.flag, padding: "3px 6px", fontSize: 12, fontWeight: 600 }} onClick={() => clearSignups(day)}>
-                Clear all
+            {(playingCount > 0 || teams.length > 0) && (
+              <button
+                className="glm-btn"
+                style={{ background: "none", color: T.flag, padding: "3px 6px", fontSize: 12, fontWeight: 600 }}
+                onClick={() => {
+                  if (window.confirm(`Clear all ${day[0].toUpperCase() + day.slice(1)} signups and any leftover teams to start this week fresh? Any real scored or published data will be saved to history first.`)) {
+                    resetDay(day);
+                  }
+                }}
+              >
+                Start new week
               </button>
             )}
           </div>
@@ -812,9 +836,12 @@ function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, c
         </div>
       </div>
 
-      <button className="glm-btn" style={{ background: T.gold, color: "#fff", width: "100%", justifyContent: "center", padding: "11px 14px", fontSize: 15, marginBottom: 14 }} onClick={() => runGenerate(day)} disabled={playingCount < 3}>
+      <button className="glm-btn" style={{ background: T.gold, color: "#fff", width: "100%", justifyContent: "center", padding: "11px 14px", fontSize: 15, marginBottom: 6 }} onClick={() => runGenerate(day)} disabled={playingCount < 3}>
         <Shuffle size={16} /> {teams.length ? "Regenerate unlocked teams" : "Generate Teams"}
       </button>
+      {dayState.teamsDate && (
+        <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 14, textAlign: "center" }}>Teams generated {dayState.teamsDate}</div>
+      )}
 
       {dayState.warning && (
         <div style={{ background: "#FBEFEA", border: `1px solid ${T.flag}33`, color: T.flag, padding: "8px 12px", borderRadius: 8, fontSize: 13, marginBottom: 12, display: "flex", gap: 6 }}>
