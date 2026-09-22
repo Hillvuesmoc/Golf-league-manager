@@ -361,6 +361,23 @@ export default function GolfLeagueApp({ onSignOut }) {
     });
   };
 
+  const finalizeWeek = (day) => {
+    setState((s) => {
+      const teams = s.days[day].teams || [];
+      if (teams.length === 0) return s;
+      const history = [
+        ...s.history,
+        {
+          id: uid(),
+          day,
+          date: new Date().toLocaleDateString(),
+          teams: teams.map((t) => ({ playerIds: t.playerIds, score: t.score ?? null })),
+        },
+      ];
+      return { ...s, history, days: { ...s.days, [day]: { ...s.days[day], teams: null, published: false } } };
+    });
+  };
+
   const updateTeamScore = (day, teamId, value) => {
     setState((s) => ({
       ...s,
@@ -553,6 +570,7 @@ export default function GolfLeagueApp({ onSignOut }) {
             addPlayerToTeam={addPlayerToTeam}
             updateTeamScore={updateTeamScore}
             publish={publish}
+            finalizeWeek={finalizeWeek}
             teamStrength={teamStrength}
             teamWarnings={teamWarnings}
             copyTeams={copyTeams}
@@ -745,7 +763,7 @@ function SubstituteControl({ unassignedPlayers, onAdd }) {
   );
 }
 
-function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, clearSignups, runGenerate, toggleLock, movePlayer, removePlayerFromTeam, addPlayerToTeam, updateTeamScore, publish, teamStrength, teamWarnings, copyTeams, copyStatus, formatTeamsText }) {
+function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, clearSignups, runGenerate, toggleLock, movePlayer, removePlayerFromTeam, addPlayerToTeam, updateTeamScore, publish, finalizeWeek, teamStrength, teamWarnings, copyTeams, copyStatus, formatTeamsText }) {
   const dayState = state.days[day];
   const teams = dayState.teams || [];
   const playingCount = Object.values(dayState.signups).filter(Boolean).length;
@@ -899,6 +917,20 @@ function DayTab({ day, state, playersById, ratingLookup, topIds, toggleSignup, c
             <Copy size={15} /> {copyStatus === day ? "Copied!" : "Copy for GroupMe"}
           </button>
         </div>
+      )}
+
+      {teams.length > 0 && (
+        <button
+          className="glm-btn"
+          style={{ background: T.gold, color: "#fff", width: "100%", justifyContent: "center", marginTop: 8, padding: "10px 14px" }}
+          onClick={() => {
+            if (window.confirm(`Save ${day[0].toUpperCase() + day.slice(1)}'s teams and scores to history, and clear the board for next week?`)) {
+              finalizeWeek(day);
+            }
+          }}
+        >
+          Finalize {day[0].toUpperCase() + day.slice(1)} & Save to History
+        </button>
       )}
 
       {teams.length > 0 && (
