@@ -328,7 +328,15 @@ export default function GolfLeagueApp({ onSignOut }) {
 
   const runGenerate = (day) => {
     const dayState = state.days[day];
-    const lockedTeams = (dayState.teams || []).filter((t) => t.locked);
+    const priorTeams = dayState.teams || [];
+    const unlockedScored = priorTeams.filter((t) => !t.locked && t.score !== null && t.score !== undefined);
+    if (unlockedScored.length > 0) {
+      const ok = window.confirm(
+        `${unlockedScored.length} unlocked team${unlockedScored.length > 1 ? "s" : ""} already ${unlockedScored.length > 1 ? "have" : "has"} a score entered. Regenerating will erase ${unlockedScored.length > 1 ? "those scores" : "that score"}. Continue?`
+      );
+      if (!ok) return;
+    }
+    const lockedTeams = priorTeams.filter((t) => t.locked);
     const lockedPlayerIds = new Set(lockedTeams.flatMap((t) => t.playerIds));
     const pool = playingIds(day).filter((id) => !lockedPlayerIds.has(id));
     const { sizes, warning } = computeTeamSizes(pool.length);
@@ -336,7 +344,8 @@ export default function GolfLeagueApp({ onSignOut }) {
     const newTeams = [...lockedTeams, ...(generated || [])];
     setState((s) => {
       const prevDay = s.days[day];
-      const shouldArchive = prevDay.published && prevDay.teams && prevDay.teams.length > 0;
+      const shouldArchive =
+        prevDay.teams && prevDay.teams.length > 0 && (prevDay.published || prevDay.teams.some((t) => t.score !== null && t.score !== undefined));
       const history = shouldArchive
         ? [
             ...s.history,
@@ -395,6 +404,7 @@ export default function GolfLeagueApp({ onSignOut }) {
 
   const publish = (day) => {
     setState((s) => {
+      if (s.days[day].published) return s;
       const teams = s.days[day].teams || [];
       const pairHistory = { ...s.pairHistory };
       teams.forEach((t) => {
@@ -1004,10 +1014,27 @@ function HistoryTab({ pairHistory, playersById, history, days }) {
         </>
       )}
 
-      {history.length > 0 && (
+      {(history.length > 0 || currentScoredTeams.length > 0) && (
         <>
           <div style={{ fontWeight: 700, fontSize: 14, color: T.fairway, marginBottom: 8 }}>Weekly team scores</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+            {Object.entries(days).map(([day, d]) => {
+              const scored = (d.teams || []).filter((t) => t.score !== null && t.score !== undefined);
+              if (scored.length === 0) return null;
+              return (
+                <div key={day} className="glm-card" style={{ padding: 12, border: `1px solid ${T.gold}` }}>
+                  <div style={{ fontSize: 12.5, color: T.gold, fontWeight: 700, marginBottom: 6 }}>
+                    {day[0].toUpperCase() + day.slice(1)} · this week{d.published ? "" : " (not published yet)"}
+                  </div>
+                  {scored.map((t, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
+                      <span>{t.playerIds.map((id) => playersById[id]?.name || "?").join(", ")}</span>
+                      <span style={{ fontWeight: 700, color: T.fairway }}>{formatScore(t.score)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
             {[...history].reverse().map((h) => (
               <div key={h.id} className="glm-card" style={{ padding: 12 }}>
                 <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 6 }}>
